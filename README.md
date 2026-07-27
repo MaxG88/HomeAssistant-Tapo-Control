@@ -8,6 +8,18 @@ Custom component - Tapo: Cameras Control - to add Tapo cameras, doorbells and ch
 
 ⭐ Now also exposing a stream for devices that have no RTSP or ONVIF capabilities.
 
+## Contributing
+
+Before opening a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md), especially if the work used an AI assistant.
+
+AI-assisted contributions are welcome when the author has reviewed, understood, and can explain the changes. Purely AI-generated or "vibe coded" PRs where the author did not review the code and behavior are not welcome and may be closed. Reviewing unverified generated code often takes longer than implementing the change directly.
+
+AI coding assistants must read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md) before modifying files, creating commits, pushing branches, or opening PRs.
+
+Please keep PRs small, focused, tested, and easy to review. Be explicit about what was tested, what was not tested, what device models were used, and whether AI generated or drafted any part of the change.
+
+For changes that need Home Assistant runtime verification, AI assistants should guide the user through testing in their Home Assistant instance, review the results with them, and iterate until the behavior is understood.
+
 ## Installation
 
 Copy contents of custom_components/tapo_control/ to custom_components/tapo_control/ in your Home Assistant config folder.
@@ -70,7 +82,7 @@ Doorbells, Cameras (for each lens, if supported):
 - Binary sensor for motion after the motion is detected for the first time and a binary sensor for doorbell press
 - Light entity, if the camera supports a floodlight switch
 - Buttons for Calibrate, Format, Manual Alarm start & stop, Moving the camera, Reboot and syncing time
-- Switch entities for Auto track, Automatic Reboot, Flip setting, LED Indicator, Lens Distortion Correction, (Rich) Notifications, Recording, Microphone Mute, Microphone Noise Cancelling, Automatically Upgrade Firmware, HDR mode, Alarm Trigger Event types, Privacy Zones, Diagnose Mode, Smart Track specific switches, Smart Dual Track specific switches, Audio Recording and Privacy mode
+- Switch entities for Auto track, Automatic Reboot, Flip setting, LED Indicator, Lens Distortion Correction, (Rich) Notifications, Recording, Microphone Mute, Microphone Noise Cancelling, Automatically Upgrade Firmware, HDR mode, Alarm Trigger Event types, Privacy Zones, Diagnose Mode, Smart Track specific switches, Smart Dual Track specific switches, Preset Patrol Mode, Audio Recording and Privacy mode
 - Select entities for Automatic Alarm, Automatic Reboot Time, Light Frequency, Motion Detection, Night Vision, Spotlight Intensity, Alarm Type, Quick Response, Smart Dual Track Method and Move to Preset
 - Number entity for Movement Angle, Speaker Volume, Microphone Volume, Spotlight Intensity, Siren Volume, Siren Duration and Motion Detection Digital Sensitivity
 - Media Source for browsing and playing recordings stored on camera
@@ -305,12 +317,14 @@ Users reported full functionality with following Tapo Cameras, Doorbells and Chi
 - C120
 - C200
 - C201
+- C206
 - C210
 - C211
 - C216
 - C220
 - C225
 - C236
+- C260
 - C310
 - C320WS
 - C402
