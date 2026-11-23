@@ -78,9 +78,11 @@ This custom component creates:
 
 Doorbells, Cameras (for each lens, if supported):
 
-- Up to 4 camera entities: HD and SD, using RTSP standard or TP-Link proprietary video protocol. If you choose to use direct entities, it is recommended to disable `Use Stream from Home Assistant` in options for the best performance and battery life.
+- HD and SD camera entities using RTSP or the TP-Link proprietary protocol (Direct). See the [streaming FAQ](#troubleshooting--faq) for playback options.
 - Binary sensor for motion after the motion is detected for the first time and a binary sensor for doorbell press
-- Light entity, if the camera supports a floodlight switch
+- Light entity, if the camera supports a floodlight switch and nightlight light entity with on/off and brightness control
+- Media player entity, if the camera has a built-in music player (e.g. C840): play/pause, previous/next track, track selection, repeat (song or playlist) and volume
+- Speaker media player for playing audio and TTS on cameras with a speaker and a configured Cloud Password
 - Buttons for Calibrate, Format, Manual Alarm start & stop, Moving the camera, Reboot and syncing time
 - Switch entities for Auto track, Automatic Reboot, Flip setting, LED Indicator, Lens Distortion Correction, (Rich) Notifications, Recording, Microphone Mute, Microphone Noise Cancelling, Automatically Upgrade Firmware, HDR mode, Alarm Trigger Event types, Privacy Zones, Diagnose Mode, Smart Track specific switches, Smart Dual Track specific switches, Preset Patrol Mode, Audio Recording and Privacy mode
 - Select entities for Automatic Alarm, Automatic Reboot Time, Light Frequency, Motion Detection, Night Vision, Spotlight Intensity, Alarm Type, Quick Response, Smart Dual Track Method and Move to Preset
@@ -96,7 +98,7 @@ Chimes:
 - Sensor entities for Network SSID, Signal Level, RSSI
 - Button entity for Reboot and Ringing the chime
 
-Additionally, following services are available for cameras with PTZ:
+Additionally, following services are available for cameras:
 
 <details>
   <summary>tapo_control.save_preset</summary>
@@ -114,6 +116,53 @@ Deletes a preset
 - **preset** Required: PTZ preset ID or a Name. See possible presets in entity attributes
 </details>
 
+
+<details>
+  <summary>tapo_control.set_record_plan</summary>
+
+`tapo_control.set_record_plan` updates the weekly recording schedule on cameras that support it. Target one camera entity for the device (HD, SD, or Direct).
+
+- **enabled** (required): Enable or disable recording. Disabling does not clear the schedule.
+- **sunday** through **saturday** (optional): Lists of `HHMM-HHMM:mode` periods in the camera's local time. Mode `1` records continuously; mode `2` records on motion. Use `2400` for the end of the day. Split overnight periods across two days.
+- Omitted days remain unchanged. An empty list (`[]`) clears that day's schedule. Gaps between periods have no recording.
+
+For example, update Monday and clear Sunday while leaving the other days unchanged:
+
+```yaml
+action: tapo_control.set_record_plan
+target:
+  entity_id: camera.your_camera_hd
+data:
+  enabled: true
+  monday:
+    - "0000-0700:1"
+    - "0700-2400:2"
+  sunday: []
+```
+
+After the call, check the camera entity's `record_plan` attribute and the schedule in the Tapo app. The **Record to SD Card** switch reflects whether recording is enabled.
+
+</details>
+
+## Two-way audio (preview)
+
+Native WebRTC and talk are **opt-in**. In the integration options, choose **Configure device** and enable **Native WebRTC and two-way audio (experimental)**. This player may increase CPU use.
+
+Talk requires Home Assistant 2026.11+, a camera with a speaker, and a configured **Cloud Password**. Enable **Settings > System > Labs > Two-way audio**, then open the camera's more-info dialog over **HTTPS**, allow microphone access, and use the microphone control.
+
+## Speaker playback
+
+Use the **Speaker** media player to play audio from Home Assistant's media browser, `media_player.play_media`, or `tts.speak`. Playback requires a configured **Cloud Password** and FFmpeg; native WebRTC can stay disabled. Starting two-way talk stops speaker playback.
+
+```yaml
+action: media_player.play_media
+target:
+  entity_id: media_player.your_camera_speaker
+data:
+  media_content_id: media-source://media_source/local/sound.mp3
+  media_content_type: audio/mpeg
+```
+
 ## Sound Detection
 
 Integration is capable of analysing sound from camera microphone and expose noise detected via binary_sensor.
@@ -128,11 +177,34 @@ Integration is capable of synchronizing recordings for fast playback.
 
 Synchronization is turned off by default, you can browse media stored on camera and request it to be played. However, downloading is rather slow, so it is a good idea to enable media synchronization in background. That way, you will be able to play any synchronized media from camera instantly.
 
+Requested recordings download in the background, with progress shown in a notification. While a download is active, cached recordings remain playable. Reloading the integration cancels its on-demand downloads; switching media sync off lets the current recording finish before the sync stops.
+
+A ✓ at the beginning of a recording's title means its video is downloaded and ready to play (for example, `✓00:00:02–00:00:04`). Refresh or reopen the recording list after a download finishes to see the checkmark; a preloaded thumbnail alone does not mark a recording as ready.
+
+With both **Cache thumbnails** and **Preload thumbnails** enabled, the initial media scan after startup downloads available detection-event thumbnails for recordings, even when video synchronization is disabled. Battery and solar-powered cameras skip this bulk thumbnail download to let them return to sleep sooner; thumbnails are requested for the selected day when you browse recordings instead. Each recording uses the thumbnail of the first detection event that starts within it. The images are saved in the cold storage `thumbs` folder without downloading the videos. Existing thumbnails are reused, and thumbnails are copied to hot storage when you browse the recordings. Recordings without a matching event, or cameras that cannot list events or provide snapshots, still get a generated thumbnail when the video is downloaded.
+
+If the initial media scan fails (for example, because no SD card is inserted), retries use the battery polling interval on battery and solar-powered cameras (10 minutes by default), or 60 seconds on mains-powered cameras. This applies even when video synchronization is disabled. An available camera or newly inserted card can therefore be detected on a later retry without reloading the integration.
+
 You can enable this setting by navigating to `Home Assistant Settings` -> `Devices & services` and clicking the `Tapo: Cameras control` integration. There, click on the `Configure` button next to the Tapo device you wish to turn media synchronization on for, and choose `Configure media`. Here, you need to define the number of hours to synchronize. Unless it is specified, synchronization does not run. Here, you are able to also set the storage path where the synchronized recordings will be stored (defaults to /config/.storage/tapo_control).
+
+The default storage is included in Home Assistant configuration backups. To keep recordings and thumbnails out of those backups, choose a directory such as `/media/tapo_control/front_camera` and exclude media from your backups.
+
+The same **Configure media** form includes two options. **Cache thumbnails** is off and **Preload thumbnails** is on by default. This loads thumbnails only while browsing and removes them after about five minutes.
+
+| Cache thumbnails | Preload thumbnails | Behavior for videos not yet downloaded |
+| --- | --- | --- |
+| On | On | Fetch thumbnails at startup and while browsing; keep them while the recordings remain on the camera. |
+| On | Off | Fetch thumbnails only while browsing; keep them while the recordings remain on the camera. |
+| Off | On | Fetch thumbnails only while browsing; delete disk and web copies after about five minutes. |
+| Off | Off | Do not fetch or display thumbnails for undownloaded videos; remove any previously cached copies. |
+
+These options do not disable thumbnails for downloaded videos, including videos downloaded for playback. Battery and solar cameras still skip startup thumbnail preloading. Changing either option reloads the camera entry and cancels active downloads.
 
 Finally, you can turn on, or off switch entity `switch.*_media_sync`.
 
 **Notice:** Recordings are deleted after the number of hours you have chosen to synchronize passes, once both the actual recording time and the file modified time is older than the number of hours set.
+
+With thumbnail caching enabled, thumbnails are kept independently of this video retention period. They are removed once a subsequent startup scan finds that the recording is no longer on the camera. With caching disabled, thumbnails remain while their downloaded videos exist; other thumbnails follow the short retention described above.
 
 ### Media download event
 
@@ -178,28 +250,37 @@ After every step, test if camera works in HA, and after each step try checking T
 <details>
   <summary>Which stream to use?</summary>
 
-This integration exposes 4 different camera entities:
+Depending on the camera and configuration, the integration exposes:
 
 - HD Stream
 - SD Stream
 - HD Stream (Direct)
 - SD Stream (Direct)
 
-Direct streams use proprietary TP-Link streaming protocol. Non-direct ones use standard RTSP protocol.
+Direct streams use the proprietary TP-Link protocol; the other entities use RTSP. Live views use Home Assistant's normal playback by default. Native WebRTC is available as an experimental opt-in. For custom cards, see the [dashboard examples](examples/EXAMPLES_LOVELACE.md).
 
 ### Why use the Direct streams?
 
 1. If you have a device which does not have RTSP functionality, it is the only way. This includes battery devices, solar devices, as well as devices working through a hub.
 2. If you have used up [all your RTSP streams](https://www.tp-link.com/cz/support/faq/2742/) and/or your RTSP streams are unstable in Home Assistant.
-3. Direct streams are _extremely_ fast to load and have less than a half a second delay in stream* (_*make sure to DISABLE `Use Stream from Home Assistant (restart required)` in integration options for the fastest experience_). Under the hood, the new streams are a binary stream of data "straight to your browser", with no unnecessary translations or overhead.
 
-### Why not use the Direct streams?
+If both work, choose the source that is more stable for your camera.
 
-If you have an option to use RTSP, it is recommended to stick with RTSP streams.
+### Configuring Direct stream parameters
 
-1. Direct streams take a bit more CPU resources since the device running this integration is now handling the binary stream directly, instead of camera exposing a standardized RTSP stream.
-2. Direct streams cannot be used with webrtc card, or go2rtc.
-3. RTSP streams are very fast with almost no delay using the [webrtc](https://github.com/AlexxIT/WebRTC) Home Assistant camera card
+Open the integration options, choose **Configure device**, and edit **Direct stream FFmpeg parameters**. This advanced YAML mapping overrides parameters for direct streams and snapshots on that device, including both HD and SD. Changes apply when a new stream starts. Reload the integration after saving to stop existing streams.
+
+For example, to try the settings reported for the C560WS in [PR #1279](https://github.com/JurajNyiri/HomeAssistant-Tapo-Control/pull/1279):
+
+```yaml
+-probesize: 50000
+-analyzeduration: 1000000
+-vsync: null
+```
+
+To try only removing `-vsync`, enter just `-vsync: null`. Set the mapping to `{}` to restore defaults: probe size 32 bytes, analysis duration 0 microseconds, and `-vsync 0` for direct MJPEG and snapshots (`-vsync` is omitted by default for WebRTC and HLS).
+
+Supported keys are `-loglevel`, `-probesize`, `-analyzeduration`, `-frames:v`, `-map-video`, `-vsync`, `-c:v`, and `-f`, matching the video arguments supported by pytapo. Values must be non-empty strings or numbers; only `-vsync` accepts `null`, which omits that flag. Codec, format, frame count, and video mapping overrides also affect snapshots, so changing them can prevent playback or image capture. For RTSP entities, **Extra arguments for ffmpeg** applies to snapshots and MJPEG, not native WebRTC.
 
 </details>
 <details>
@@ -208,6 +289,15 @@ If you have an option to use RTSP, it is recommended to stick with RTSP streams.
 Motion sensor is added only after a motion is detected for the first time.
 
 It also requires ONVIF support on the device. If the device is not exposing Onvif interface (most likely if it is battery or solar powered), motion events will not work.
+
+If the initial ONVIF connection fails, integration setup continues and ONVIF is retried during camera updates. Motion events and time synchronization require a successful ONVIF connection. Enable debug logging for `custom_components.tapo_control` to see the camera address, failed operation, initialization duration, and exception traceback. For event subscription failures handled internally by Home Assistant, also enable `homeassistant.components.onvif` debug logging:
+
+```yaml
+logger:
+  logs:
+    custom_components.tapo_control: debug
+    homeassistant.components.onvif: debug
+```
 
 - Make sure the camera has motion detection turned on
 - Make sure the camera has privacy mode turned off
@@ -227,49 +317,32 @@ Also make sure that:
 </details>
 
 <details>
-  <summary>Big delay in camera stream</summary>
+  <summary>Delay or freezes in the live view</summary>
 
-This is a [known issue](https://community.home-assistant.io/t/i-tried-all-the-camera-platforms-so-you-dont-have-to/222999) of Home Assistant.
+First check that the dashboard card is showing live video rather than refreshing snapshots. For built-in picture cards, set [`camera_view: live`](https://www.home-assistant.io/dashboards/picture-entity/):
 
-There is an ability to disable usage of Home Assistant Stream component for the camera, which might lower the delay very significantly at cost of higher CPU usage.
-
-You can choose to disable stream component when adding the camera, or via Options when camera has already been added. This change requires a restart of Home Assistant.
-
-There might be some disadvantages to doing this, like losing option to control playback and a higher CPU usage.
-Results depend on your hardware and future Home Assistant updates.
-
-If you disable stream and your hardware is not up to the task, you will get artifacts, bigger delay and freezes.
-
-If you wish, try it out and see what works best for you.
-
-**Another possibility is using [WebRTC Camera by AlexxIT](https://github.com/AlexxIT/WebRTC).**
-
-Example working configuration:
-
+```yaml
+type: picture-entity
+entity: camera.bedroom_sd
+camera_view: live
+tap_action:
+  action: more-info
 ```
-type: custom:webrtc-camera
-entity: camera.bedroom_hd
-```
+
+With the experimental native WebRTC option enabled, viewers of the same stream share one camera connection and decoder. Video is still encoded for each viewer on the Home Assistant host. Higher resolutions and more simultaneous live views increase CPU use. Try SD, close unused live views (especially on battery cameras), and check Home Assistant CPU usage and the camera's network connection.
+
+Delay depends on the camera, network and available processing power.
 
 </details>
 
 <details>
   <summary>No audio in camera stream</summary>
 
-Supported audio codecs in Home Assistant are "aac", "ac3" and "mp3".
+The optional native WebRTC player supports camera audio for both RTSP and Direct entities. Unmute the player and check the camera's **Microphone Mute** and **Microphone Volume** settings.
 
-Tapo Cameras use PCM ALAW (alaw) which is not supported.
+**RTSP recordings made with `camera.record` have no audio when the camera uses A-law**, which Home Assistant's stream recorder does not support. This also affects RTSP HLS playback; native WebRTC live views support sound.
 
-[More details here.](https://github.com/JurajNyiri/HomeAssistant-Tapo-Control/issues/58#issuecomment-762787442)
-
-**You can get sound working using [WebRTC Camera by AlexxIT](https://github.com/AlexxIT/WebRTC).**
-
-Example working configuration:
-
-```
-type: custom:webrtc-camera
-entity: camera.bedroom_hd
-```
+Use a **Direct** camera entity to record with audio. Direct streams convert camera audio to AAC for Home Assistant recordings and HLS playback. MJPEG has no audio.
 
 </details>
 
@@ -324,19 +397,23 @@ Users reported full functionality with following Tapo Cameras, Doorbells and Chi
 - C220
 - C225
 - C236
+- C250
 - C260
 - C310
 - C320WS
+- C401
 - C402
 - C403
 - C410
 - C420
 - C420S2
 - C425
+- C460
 - C500
 - C510W
 - C520WS
 - C530WS
+- C610
 - C710
 - C720
 - D100C

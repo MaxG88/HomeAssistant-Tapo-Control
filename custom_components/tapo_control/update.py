@@ -88,6 +88,10 @@ class TapoCamUpdate(UpdateEntity):
                     deviceRegistry.async_update_device(
                         device.id, sw_version=newDeviceInfo["sw_version"]
                     )
+                    if device is not None:
+                        deviceRegistry.async_update_device(
+                            device.id, sw_version=newDeviceInfo["sw_version"]
+                        )
                     # Reset check for firmware check
                     self._entry["lastFirmwareCheck"] = 0
                     self._in_progress = False
