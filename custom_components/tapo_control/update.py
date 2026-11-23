@@ -49,7 +49,7 @@ class TapoCamUpdate(UpdateEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return build_device_info(self._attributes)
+        return build_device_info(self._attributes, self._name)
 
     @property
     def unique_id(self) -> str:
@@ -81,10 +81,12 @@ class TapoCamUpdate(UpdateEntity):
                     )
                     # Update Device Registry with new information
                     deviceRegistry = dr.async_get(self._hass)
-                    newDeviceInfo = build_device_info(camData["basic_info"])
-                    device = deviceRegistry.async_get_device_by_identifier(
-                        next(iter(newDeviceInfo["identifiers"])),
-                        self._entry["entry"].entry_id,
+                    newDeviceInfo = build_device_info(camData["basic_info"], self._name)
+                    device = deviceRegistry.async_get_device(
+                        newDeviceInfo["identifiers"]
+                    )
+                    deviceRegistry.async_update_device(
+                        device.id, sw_version=newDeviceInfo["sw_version"]
                     )
                     if device is not None:
                         deviceRegistry.async_update_device(

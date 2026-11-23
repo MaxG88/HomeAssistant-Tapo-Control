@@ -369,7 +369,9 @@ class TapoCamEntity(Camera):
         self._stream_label = stream_label or fallback_label
         self._stream_unique_id = stream_unique_id or fallback_uid
         self._extra_arguments = config_entry.data.get(CONF_EXTRA_ARGUMENTS)
-        self._attr_extra_state_attributes = dict(entry["camData"]["basic_info"])
+        self._enable_stream = config_entry.data.get(ENABLE_STREAM)
+        self._attr_extra_state_attributes = entry["camData"]["basic_info"]
+        self._device_name = entry["name"]
         self._attr_icon = "mdi:cctv"
         self._attr_should_poll = True
         self._is_cam_entity = True
@@ -405,7 +407,7 @@ class TapoCamEntity(Camera):
 
     @property
     def name(self) -> str:
-        name = self._attr_extra_state_attributes["device_alias"]
+        name = self._device_name
         name += f" {self._stream_label} Stream"
         if self._directStream:
             name += " (Direct)"
@@ -419,7 +421,7 @@ class TapoCamEntity(Camera):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return build_device_info(self._attr_extra_state_attributes)
+        return build_device_info(self._attr_extra_state_attributes, self._device_name)
 
     @property
     def motion_detection_enabled(self):
